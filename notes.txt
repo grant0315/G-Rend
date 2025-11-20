@@ -1,0 +1,7 @@
+For compilatiofuture compilation:
+- Try compiling via gcc src/*.c -I include -o game
+- - Basically allows the compiler to find header files and combine all src
+- include/ will have all .h files 
+- Will be using ncurses for the project
+- - compilation with ncurses -> gcc main.c -lncurses -o game
+
