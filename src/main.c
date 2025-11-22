@@ -1,260 +1,372 @@
-// src/main.c
-#include <ncurses.h>
-#include <stdio.h>
-#include "map.h"
+#include "../include/game.h"
+#include "../include/renderer.h"
+#include "../include/save.h"
+#include "../include/map.h"
+#include "../include/enemy.h"
+#include "../include/item.h"
 
-typedef struct {
-    int x;
-    int y;
-    int hp;
-} Player;
+#include <stdlib.h>
 
-// Global map used by the game
-static Tile g_map[MAP_HEIGHT][MAP_WIDTH];
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 
-static int cam_x = 0;
-static int cam_y = 0;
-
-static int zoom = 1;
-#define ZOOM_MIN 1 // 1 char per tile
-#define ZOOM_MAX 3 // FUTURE: could be higher in the future
-
-void init_ncurses(void) {
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(0);
-
-    if (has_colors()) {
-        start_color();
-        init_pair(1, COLOR_WHITE,  COLOR_BLACK); // Default
-        init_pair(2, COLOR_YELLOW, COLOR_BLACK); // Player
-        init_pair(3, COLOR_CYAN,   COLOR_BLACK); // Floor
-        init_pair(4, COLOR_RED,    COLOR_WHITE); // Walls
-        init_pair(5, COLOR_BLACK,  COLOR_WHITE); // Status Bar
-        init_pair(6, COLOR_GREEN,  COLOR_BLACK); // Stairs up
-        init_pair(7, COLOR_MAGENTA,COLOR_BLACK); // Stairs down
-    }
-}
-
-// Center camera on player and clamp to map bounds
-void update_camera(const Player *p, int view_w, int view_h) {
-	cam_x = p->x - view_w / 2;
-	cam_y = p->y - view_h / 2;
-
-	if (cam_x < 0) cam_x = 0;
-	if (cam_y < 0) cam_y = 0;
-
-	if (cam_x > MAP_WIDTH - view_w)  cam_x = MAP_WIDTH - view_w;
-	if (cam_y > MAP_HEIGHT - view_h) cam_y = MAP_HEIGHT - view_h;
-
-	if (cam_x < 0) cam_x = 0;
-	if (cam_y < 0) cam_y = 0;
-}
-
-void shutdown_ncurses(void) {
-    endwin();
-}
-
-void draw_map(int tiles_w, int tiles_h) {
-    for (int ty = 0; ty < tiles_h; ty++) {
-        for (int tx = 0; tx < tiles_w; tx++) {
-            int mx = cam_x + tx; // map x (tile)
-            int my = cam_y + ty; // map y (tile)
-
-            Tile tile = g_map[my][mx];
-            char ch   = '#';
-            int color_pair = 1; // default
-
-            switch (tile) {
-                case TILE_WALL:
-                    ch = ' ';
-                    color_pair = 4;
-                    break;
-                case TILE_FLOOR:
-                    ch = ' ';
-                    color_pair = 3;
-                    break;
-                case TILE_STAIRS_UP:
-                    ch = '<';
-                    color_pair = 6;
-                    break;
-                case TILE_STAIRS_DOWN:
-                    ch = '>';
-                    color_pair = 7;
-                    break;
-                default:
-                    ch = '?';
-                    break;
-            }
-
-            // top-left of this tile on screen
-            int screen_y0 = ty * zoom;
-            int screen_x0 = tx * zoom;
-
-            // Fill a zoom x zoom block (zoomed tile)
-            for (int oy = 0; oy < zoom && screen_y0 + oy < LINES - 1; oy++) {
-                for (int ox = 0; ox < zoom && screen_x0 + ox < COLS; ox++) {
-                    if (has_colors()) {
-                        attron(COLOR_PAIR(color_pair));
-                        mvaddch(screen_y0 + oy, screen_x0 + ox, ch);
-                        attroff(COLOR_PAIR(color_pair));
-                    } else {
-                        mvaddch(screen_y0 + oy, screen_x0 + ox, ch);
-                    }
-                }
-            }
-        }
-    }
-}
-
-void draw_status_bar(const Player *p, int view_w, int view_h) {
-    int screen_width = COLS;
-    int y = LINES - 1; // bottom line
-
-    if (has_colors()) {
-        attron(COLOR_PAIR(5));
-        mvhline(y, 0, ' ', screen_width);
-    } else {
-        mvhline(y, 0, ' ', screen_width);
-    }
-
-    char status[128];
-    snprintf(status, sizeof(status),
-             "HP: %d   Move: Arrows/WASD   Zoom: +/-   Quit: q", p->hp);
-
-    if (has_colors()) {
-        mvprintw(y, 1, "%s", status);
-        attroff(COLOR_PAIR(5));
-    } else {
-        mvprintw(y, 1, "%s", status);
-    }
-}
-
-
-// Check if a tile is walkable (not a wall)
-int is_walkable(int x, int y) {
-    if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) {
-        return 0;
-    }
-
-    Tile tile = g_map[y][x];
-    // Floors and stairs are walkable
-    return (tile == TILE_FLOOR ||
-            tile == TILE_STAIRS_UP ||
-            tile == TILE_STAIRS_DOWN);
-}
-
-void draw_player(const Player *p, int tiles_w, int tiles_h) {
-    int tile_sx = p->x - cam_x;
-    int tile_sy = p->y - cam_y;
-
-    if (tile_sx < 0 || tile_sx >= tiles_w || tile_sy < 0 || tile_sy >= tiles_h) {
-        return;
-    }
-
-    int screen_x0 = tile_sx * zoom;
-    int screen_y0 = tile_sy * zoom;
-
-    for (int oy = 0; oy < zoom && screen_y0 + oy < LINES - 1; oy++) {
-        for (int ox = 0; ox < zoom && screen_x0 + ox < COLS; ox++) {
-            if (has_colors()) {
-                attron(COLOR_PAIR(2));
-                mvaddch(screen_y0 + oy, screen_x0 + ox, '@');
-                attroff(COLOR_PAIR(2));
-            } else {
-                mvaddch(screen_y0 + oy, screen_x0 + ox, '@');
-            }
-        }
-    }
-}
-
-
-void handle_input(int ch, Player *p) {
-    int new_x = p->x;
-    int new_y = p->y;
-
-    switch (ch) {
-        case KEY_UP:
-        case 'w':
-        case 'W':
-            new_y--;
-            break;
-        case KEY_DOWN:
-        case 's':
-        case 'S':
-            new_y++;
-            break;
-        case KEY_LEFT:
-        case 'a':
-        case 'A':
-            new_x--;
-            break;
-        case KEY_RIGHT:
-        case 'd':
-        case 'D':
-            new_x++;
-            break;
-				case '+':
-				case '=': // Shift + =
-						if (zoom < ZOOM_MAX) zoom++; // Zoom IN: bigger tiles, fewer visiable
-						break;
-				case '-':
-				case '_':
-						if (zoom > ZOOM_MIN) zoom--; // Zoom OUT: smaller tiles, more visiable
-						break;
-
-				default:
-            break;
-    }
-
-    if (is_walkable(new_x, new_y)) {
-        p->x = new_x;
-        p->y = new_y;
-    }
-}
-
-int main(void) {
-    // Generate the map using your map module
-    generate_level(g_map);
-
-    // Start the player roughly in the center
-    Player player = { .x = MAP_WIDTH / 2, .y = MAP_HEIGHT / 2, .hp = 10 };
-
-    init_ncurses();
-
-    int ch;
-		while(1) {
-			clear();
-
-			// How many tiles can we show, given the zoom?
-			int tiles_w = COLS / zoom;
-			int tiles_h = (LINES - 2) / zoom; // leave room for status bar
-
-			if (tiles_w < 1) tiles_w = 1;
-			if (tiles_h < 1) tiles_h = 1;
-			if (tiles_w > MAP_WIDTH)  tiles_w = MAP_WIDTH;
-			if (tiles_h > MAP_HEIGHT) tiles_h = MAP_HEIGHT;
-
-			// Update camera in TILE space
-			update_camera(&player, tiles_w, tiles_h);
-
-			// Draw everything in TILE space
-			draw_map(tiles_w, tiles_h);
-			draw_player(&player, tiles_w, tiles_h);
-			draw_status_bar(&player, tiles_w, tiles_h);
-
-			refresh();
-
-			ch = getch();
-			if (ch == 'q' || ch == 'Q') {
-					break;
-			}
-
-			handle_input(ch, &player);
-		}
-
-    shutdown_ncurses();
+static int is_walkable(const GameState *game, int x, int y) {
+  if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) {
     return 0;
+  }
+  Tile tile = game->map[y][x];
+  return (tile == TILE_FLOOR || tile == TILE_STAIRS_UP || tile == TILE_STAIRS_DOWN);
+}
+
+static void ensure_player_on_floor(GameState *game) {
+  if (is_walkable(game, game->player.x, game->player.y)) {
+    return;
+  }
+  for (int y = 0; y < MAP_HEIGHT; y++) {
+    for (int x = 0; x < MAP_WIDTH; x++) {
+      if (is_walkable(game, x, y)) {
+        game->player.x = x;
+        game->player.y = y;
+        return;
+      }
+    }
+  }
+}
+
+static GameInput translate_key(SDL_Keycode sym, const GameState *game) {
+  switch (sym) {
+  case SDLK_w:
+  case SDLK_UP:
+    return GAME_INPUT_MOVE_UP;
+  case SDLK_s:
+  case SDLK_DOWN:
+    return GAME_INPUT_MOVE_DOWN;
+  case SDLK_LEFT:
+    return GAME_INPUT_MOVE_LEFT;
+  case SDLK_a:
+    // 'a' only for movement when not in inventory menu
+    if (game->menu_type != MENU_INVENTORY) {
+      return GAME_INPUT_MOVE_LEFT;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_RIGHT:
+    return GAME_INPUT_MOVE_RIGHT;
+  case SDLK_TAB:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_INVENTORY;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_RETURN:
+    if (game->state == GAME_STATE_START_SCREEN) {
+      return GAME_INPUT_START_GAME;
+    }
+    return GAME_INPUT_MENU_SELECT;
+  case SDLK_SPACE:
+    if (game->state == GAME_STATE_START_SCREEN) {
+      return GAME_INPUT_START_GAME;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_ESCAPE:
+    if (game->state == GAME_STATE_PLAYING) {
+      // Cancel targeting first, then menus, then quit
+      if (game->targeting_mode != TARGETING_NONE) {
+        return GAME_INPUT_CANCEL_TARGETING;
+      }
+      if (game->menu_type != MENU_NONE) {
+        return GAME_INPUT_MENU_BACK;
+      }
+    }
+    return GAME_INPUT_QUIT;
+  case SDLK_q:
+    return GAME_INPUT_QUIT;
+  case SDLK_F5:
+    return GAME_INPUT_SAVE;
+  case SDLK_F9:
+    return GAME_INPUT_LOAD;
+  case SDLK_r:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_REST;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_f:
+  case SDLK_o:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_INTERACT;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_e:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_PICKUP_ALL;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_i:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_INVENTORY;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_c:
+  case SDLK_b:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_SPELL_CODEX;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_1:
+    if (game->state == GAME_STATE_PLAYING) {
+      // In pickup menu, pick item; otherwise cast spell
+      if (game->menu_type == MENU_ITEM_PICKUP) {
+        return GAME_INPUT_PICKUP_ITEM_1;
+      }
+      return GAME_INPUT_CAST_SPELL_1;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_2:
+    if (game->state == GAME_STATE_PLAYING) {
+      if (game->menu_type == MENU_ITEM_PICKUP) {
+        return GAME_INPUT_PICKUP_ITEM_2;
+      }
+      return GAME_INPUT_CAST_SPELL_2;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_3:
+    if (game->state == GAME_STATE_PLAYING) {
+      if (game->menu_type == MENU_ITEM_PICKUP) {
+        return GAME_INPUT_PICKUP_ITEM_3;
+      }
+      return GAME_INPUT_CAST_SPELL_3;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_4:
+    if (game->state == GAME_STATE_PLAYING) {
+      if (game->menu_type == MENU_ITEM_PICKUP) {
+        return GAME_INPUT_PICKUP_ITEM_4;
+      }
+      return GAME_INPUT_CAST_SPELL_4;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_5:
+    if (game->state == GAME_STATE_PLAYING) {
+      if (game->menu_type == MENU_ITEM_PICKUP) {
+        return GAME_INPUT_PICKUP_ITEM_5;
+      }
+      return GAME_INPUT_CAST_SPELL_5;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_6:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_CAST_SPELL_6;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_7:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_CAST_SPELL_7;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_8:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_CAST_SPELL_8;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_9:
+    if (game->state == GAME_STATE_PLAYING) {
+      return GAME_INPUT_CAST_SPELL_9;
+    }
+    return GAME_INPUT_NONE;
+  case SDLK_d:
+    if (game->state == GAME_STATE_PLAYING && game->menu_type == MENU_INVENTORY) {
+      return GAME_INPUT_DROP_ITEM;
+    }
+    return GAME_INPUT_NONE;
+  // Note: Zoom is handled by mouse wheel only, not keyboard
+  default:
+    return GAME_INPUT_NONE;
+  }
+}
+
+static void handle_mouse_click(GameState *game, int mouse_x, int mouse_y,
+                                int window_w, int window_h, int tiles_w, int tiles_h) {
+  if (game->state != GAME_STATE_PLAYING) {
+    return;
+  }
+
+  int map_area_y = TITLE_BAR_HEIGHT;
+  int map_area_h = window_h - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT;
+  int map_area_w = window_w - SIDE_PANEL_WIDTH;
+
+  if (mouse_y < map_area_y || mouse_y >= map_area_y + map_area_h ||
+      mouse_x < 0 || mouse_x >= map_area_w) {
+    return;
+  }
+
+  int tile_size = game_get_tile_size(game);
+  int tile_x = mouse_x / tile_size;
+  int tile_y = (mouse_y - map_area_y) / tile_size;
+
+  if (tile_x < 0 || tile_x >= tiles_w || tile_y < 0 || tile_y >= tiles_h) {
+    return;
+  }
+
+  int map_x = game->cam_x + tile_x;
+  int map_y = game->cam_y + tile_y;
+
+  if (map_x < 0 || map_x >= MAP_WIDTH || map_y < 0 || map_y >= MAP_HEIGHT) {
+    return;
+  }
+  
+  // Check if clicking on an enemy (for direct attack if adjacent)
+  Enemy *enemy = enemy_get_at_position(game, map_x, map_y);
+  if (enemy) {
+    // Check if player is adjacent
+    int dx = abs(game->player.x - map_x);
+    int dy = abs(game->player.y - map_y);
+    if ((dx == 1 && dy == 0) || (dx == 0 && dy == 1)) {
+      // Adjacent, attack directly
+      player_attack_enemy(game, enemy);
+      return;
+    }
+    // Not adjacent, path to position next to enemy
+  }
+
+  game_handle_input(game, GAME_INPUT_MOVE_TO_POS, map_x, map_y,
+                    SDL_GetTicks());
+}
+
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
+
+  SDL_Log("=== G-Rend Roguelike Starting ===");
+  
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+    SDL_Log("SDL_Init failed: %s", SDL_GetError());
+    return 1;
+  }
+  SDL_Log("SDL initialized successfully");
+
+  Renderer renderer = {0};
+  SDL_Log("Initializing renderer...");
+  if (renderer_init(&renderer, WINDOW_WIDTH, WINDOW_HEIGHT) != 0) {
+    SDL_Quit();
+    return 1;
+  }
+  SDL_Log("Renderer initialized");
+
+  GameState game;
+  SDL_Log("Initializing game state...");
+  game_init(&game);
+  SDL_Log("Game state: %d (0=START, 1=PLAYING, 2=QUIT)", game.state);
+
+  int running = 1;
+  while (running) {
+    int window_w = 0;
+    int window_h = 0;
+    SDL_GetWindowSize(renderer.window, &window_w, &window_h);
+
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT) {
+        running = 0;
+        break;
+      }
+      
+      // Mouse motion events are now handled in main loop for smoother tracking
+
+      if (event.type == SDL_KEYDOWN) {
+        SDL_Keycode key = event.key.keysym.sym;
+        GameInput input = translate_key(key, &game);
+        
+        // Debug: Log any key that produces a non-NONE input
+        if (input != GAME_INPUT_NONE) {
+          SDL_Log("Key %d ('%c') -> GameInput %d", key, (char)key, input);
+        }
+        
+        if (input == GAME_INPUT_LOAD && game.state == GAME_STATE_START_SCREEN) {
+          if (load_game(&game, "save.json")) {
+            if (game.state == GAME_STATE_PLAYING) {
+              generate_level(game.map);
+              ensure_player_on_floor(&game);
+            }
+          }
+          continue;
+        }
+        if (input == GAME_INPUT_NONE) {
+          continue;
+        }
+        if (game_handle_input(&game, input, 0, 0, SDL_GetTicks()) < 0) {
+          running = 0;
+          break;
+        }
+      }
+
+      if (event.type == SDL_MOUSEBUTTONDOWN) {
+        if (event.button.button == SDL_BUTTON_LEFT) {
+          // Handle spell targeting confirmation
+          if (game.state == GAME_STATE_PLAYING && game.targeting_mode == TARGETING_SPELL) {
+            game_confirm_spell_cast(&game);
+            continue;
+          }
+          
+          if (game.menu_type != MENU_NONE) {
+            if (game_menu_click(&game, event.button.x, event.button.y, window_w, window_h)) {
+              continue;
+            }
+          }
+          if (game.state == GAME_STATE_PLAYING) {
+            int tiles_w = 0;
+            int tiles_h = 0;
+            game_compute_view(&game, window_w, window_h, &tiles_w, &tiles_h);
+            handle_mouse_click(&game, event.button.x, event.button.y,
+                               window_w, window_h, tiles_w, tiles_h);
+          }
+        }
+      }
+
+      // Zoom disabled for now due to event handling issues
+      /*
+      if (event.type == SDL_MOUSEWHEEL) {
+        if (game.state == GAME_STATE_PLAYING) {
+          SDL_MouseWheelEvent *wheel_event = (SDL_MouseWheelEvent*)&event;
+          SDL_Log("MOUSEWHEEL event: y=%d, x=%d, timestamp=%u", 
+                  wheel_event->y, wheel_event->x, wheel_event->timestamp);
+          
+          // Only process significant wheel movements (filter out noise)
+          if (wheel_event->y > 0) {
+            SDL_Log("Calling game_handle_input with ZOOM_IN");
+            game_handle_input(&game, GAME_INPUT_ZOOM_IN, 0, 0, SDL_GetTicks());
+          } else if (wheel_event->y < 0) {
+            SDL_Log("Calling game_handle_input with ZOOM_OUT");
+            game_handle_input(&game, GAME_INPUT_ZOOM_OUT, 0, 0, SDL_GetTicks());
+          }
+        }
+      }
+      */
+    }
+
+    if (game.state == GAME_STATE_START_SCREEN) {
+      renderer_draw_start_screen(&renderer, window_w, window_h);
+      SDL_RenderPresent(renderer.renderer);
+    } else if (game.state == GAME_STATE_PLAYING) {
+      // Update spell targeting continuously with current mouse position
+      if (game.targeting_mode == TARGETING_SPELL) {
+        int mouse_x, mouse_y;
+        SDL_GetMouseState(&mouse_x, &mouse_y);
+        game_update_spell_targeting(&game, mouse_x, mouse_y, window_w, window_h);
+      }
+      
+      game_update(&game, SDL_GetTicks());
+      int tiles_w = 0;
+      int tiles_h = 0;
+      game_compute_view(&game, window_w, window_h, &tiles_w, &tiles_h);
+      game_update_camera(&game, tiles_w, tiles_h);
+      renderer_draw_game(&renderer, &game, window_w, window_h, tiles_w,
+                         tiles_h);
+    } else {
+      running = 0;
+    }
+
+    SDL_Delay(16);
+  }
+
+  renderer_shutdown(&renderer);
+  SDL_Quit();
+  return 0;
 }

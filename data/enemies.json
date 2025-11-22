@@ -1,0 +1,107 @@
+[
+  {
+    "name": "Rat",
+    "description": "A small disease-carrying rodent",
+    "glyph": "r",
+    "max_hp": 5,
+    "attack_power": 2,
+    "defense": 0,
+    "xp_value": 5,
+    "aggro_range": 3,
+    "color_r": 150,
+    "color_g": 100,
+    "color_b": 50
+  },
+  {
+    "name": "Goblin",
+    "description": "A small green humanoid with a rusty dagger",
+    "glyph": "g",
+    "max_hp": 15,
+    "attack_power": 5,
+    "defense": 1,
+    "xp_value": 15,
+    "aggro_range": 5,
+    "color_r": 50,
+    "color_g": 200,
+    "color_b": 50
+  },
+  {
+    "name": "Orc",
+    "description": "A fierce warrior with crude armor",
+    "glyph": "o",
+    "max_hp": 30,
+    "attack_power": 8,
+    "defense": 3,
+    "xp_value": 30,
+    "aggro_range": 6,
+    "color_r": 100,
+    "color_g": 150,
+    "color_b": 100
+  },
+  {
+    "name": "Troll",
+    "description": "A large regenerating monster",
+    "glyph": "T",
+    "max_hp": 50,
+    "attack_power": 12,
+    "defense": 5,
+    "xp_value": 50,
+    "aggro_range": 7,
+    "color_r": 120,
+    "color_g": 120,
+    "color_b": 80
+  },
+  {
+    "name": "Dragon",
+    "description": "A mighty fire-breathing beast",
+    "glyph": "D",
+    "max_hp": 100,
+    "attack_power": 20,
+    "defense": 10,
+    "xp_value": 200,
+    "aggro_range": 10,
+    "color_r": 255,
+    "color_g": 50,
+    "color_b": 50
+  },
+  {
+    "name": "Skeleton",
+    "description": "An animated pile of bones",
+    "glyph": "s",
+    "max_hp": 20,
+    "attack_power": 6,
+    "defense": 2,
+    "xp_value": 20,
+    "aggro_range": 4,
+    "color_r": 220,
+    "color_g": 220,
+    "color_b": 220
+  },
+  {
+    "name": "Zombie",
+    "description": "A shambling undead creature",
+    "glyph": "z",
+    "max_hp": 25,
+    "attack_power": 7,
+    "defense": 1,
+    "xp_value": 18,
+    "aggro_range": 4,
+    "color_r": 100,
+    "color_g": 180,
+    "color_b": 100
+  },
+  {
+    "name": "Spider",
+    "description": "A giant venomous arachnid",
+    "glyph": "S",
+    "max_hp": 12,
+    "attack_power": 4,
+    "defense": 0,
+    "xp_value": 12,
+    "aggro_range": 6,
+    "color_r": 80,
+    "color_g": 60,
+    "color_b": 80
+  }
+]
+

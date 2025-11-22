@@ -3,15 +3,17 @@
 
 #include <stdio.h>
 
-#define MAP_WIDTH  200
-#define MAP_HEIGHT 100
+#define MAP_WIDTH 150
+#define MAP_HEIGHT 75
 
 // Tile types used by both the game and the image gen
 typedef enum {
-	TILE_WALL = 0,
-	TILE_FLOOR = 1,
-	TILE_STAIRS_UP = 2, 
-	TILE_STAIRS_DOWN = 3
+  TILE_WALL = 0,
+  TILE_FLOOR = 1,
+  TILE_STAIRS_UP = 2,
+  TILE_STAIRS_DOWN = 3,
+  TILE_DOOR_CLOSED = 4,
+  TILE_DOOR_OPEN = 5
 } Tile;
 
 // Generate a new level (random walk + stairs)
@@ -19,9 +21,9 @@ void generate_level(Tile map[MAP_HEIGHT][MAP_WIDTH]);
 
 // Optional: convert map to RGB image and write to PPM (for testing)
 void map_to_image(Tile map[MAP_HEIGHT][MAP_WIDTH],
-		unsigned char image[MAP_HEIGHT][MAP_WIDTH][3]);
+                  unsigned char image[MAP_HEIGHT][MAP_WIDTH][3]);
 
 void write_image(const char *filename,
-		unsigned char image[MAP_HEIGHT][MAP_WIDTH][3]);
+                 unsigned char image[MAP_HEIGHT][MAP_WIDTH][3]);
 
 #endif // MAP_H

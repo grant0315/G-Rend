@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "name": "Health Potion",
+      "description": "Restores HP when consumed",
+      "quantity": 3
+    },
+    {
+      "name": "Mana Potion",
+      "description": "Restores MP when consumed",
+      "quantity": 2
+    },
+    {
+      "name": "Rations",
+      "description": "Food for long journeys",
+      "quantity": 5
+    },
+    {
+      "name": "Torch",
+      "description": "Provides light in dark places",
+      "quantity": 1
+    },
+    {
+      "name": "Rope",
+      "description": "Useful for climbing and tying",
+      "quantity": 1
+    },
+    {
+      "name": "Lockpick",
+      "description": "Opens locked doors and chests",
+      "quantity": 2
+    },
+    {
+      "name": "Bandage",
+      "description": "Stops bleeding",
+      "quantity": 4
+    }
+  ]
+}
+

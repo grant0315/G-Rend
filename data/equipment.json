@@ -1,0 +1,35 @@
+{
+  "equipment": [
+    {
+      "name": "Sword",
+      "description": "A basic iron sword",
+      "slot": 0
+    },
+    {
+      "name": "Leather Armor",
+      "description": "Light protection for adventurers",
+      "slot": 1
+    },
+    {
+      "name": "Boots",
+      "description": "Sturdy boots for long journeys",
+      "slot": 2
+    },
+    {
+      "name": "Ring",
+      "description": "Magical ring that boosts power",
+      "slot": 3
+    },
+    {
+      "name": "Shield",
+      "description": "Wooden shield for defense",
+      "slot": 0
+    },
+    {
+      "name": "Helmet",
+      "description": "Protective headgear",
+      "slot": 4
+    }
+  ]
+}
+
